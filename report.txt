@@ -1,0 +1,25 @@
+1. Only one minor comment on the unigram tagger - when I fixed a bug that increased my overall F1 significantly, it also drastically reduced both facets of my performance on locations.
+
+				 precision 	recall 	F1-Score
+Total:	 0.221961	0.525544	0.312106
+	 
+2. I achieved results on the bigram tagger which were significantly higher than the guidelines. I think this was due to my program's aggressive pruning of possible routes which used _RARE_ by testing
+
+if word in wordMap and tag not in wordMap[word]:
+	return 0
+	
+This essentially says that if this word appears in any tag, but not this one, I should not use _RARE_ for it, but should instead zero out this branch.
+This tagger took me a very long time to get it working properly.
+
+				 precision 	recall 	F1-Score
+Total:	 0.775563	0.557579	0.648749
+
+3. This one also took me a long time to get working, and I think its good results come from the same factors as those of my bigram tagger.
+
+				 precision 	recall 	F1-Score
+Total:	 0.785714	0.615748	0.690424
+
+4. In order to improve my trigram tagger, I added three substitute types, covering the types of words I noticed being replaced with _RARE_ most often. These were '_CAP_', '_ALLCAPS_', '_NUM_', representing words that start with a capital, words that were all-caps, and words which only contained numbers and punctuation. I think this helped a lot, since the fallback behavior of RARE was always the weakest part of this system.
+
+				 precision 	recall 	F1-Score
+Total:	 0.744531	0.728714	0.736537
