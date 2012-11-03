@@ -73,13 +73,11 @@ def prob_given_tag(word, tag, tags, tagCounts, wordCounts):
       return prob_given_tag('_RARE_', tag, tags, tagCounts, wordCounts)
   return float(tags[tag][word]) / tagCounts[tag]
 
-# returns q(t_i | t_i-1)
+# returns q(t_i | t_i-1, t_i-2)
 def trigram_parameter(tag, previous, preprevious, tagCounts, trigramStore):
   if (preprevious, previous) not in trigramStore:
-    # return 1.0 / tagCounts[previous]
     return 0
   if tag not in trigramStore[(preprevious, previous)]:
-    # return 1.0 / bigramCounts[(preprevious, previous)]
     return 0
   result = float(trigramStore[(preprevious, previous)][tag]) / bigramCounts[(preprevious, previous)]
   return result
@@ -101,34 +99,21 @@ def viterbi(words, tags, tagCounts, wordCounts, trigramStore):
   backpointers = {}
   probabilities = {}
   word = words[0]
-  # if word == "May":
-  #   print '\n\n'
-  #   print '------------------------------'
-  # print word
-  # print trigramStore
+  
+  # first word is a special case
   for tag in tags:
     try:
       tri = trigram_parameter(tag, '*', '*', tagCounts, trigramStore)
       given_tag = prob_given_tag(word, tag, tags, tagCounts, wordCounts)
       tri = -1000 if tri == 0 else math.log(tri, 2)
       given_tag = -1000 if given_tag == 0 else math.log(given_tag, 2)
-      # print "tri:", tri
-      # print "given_tag:", given_tag
       probabilities[(0, tag, '*')] = tri + given_tag
     except ValueError:
       print words
       print tag
       exit()
   
-  # print probabilities
-  # exit()
-  
-  #   if word == "May":
-  #     print "prob_given_tag for ", word, tag, prob_given_tag(word, tag, tags, tagCounts, wordCounts)
-  #     print "trigram_parameter for ", tag, '*', '*', trigram_parameter(tag, '*', '*', tagCounts, trigramStore)
-  # if word == "May":
-  #   print probabilities
-  
+  # so is the second
   if len(words) > 1:
     word = words[1]
     for previous in tags:
@@ -140,6 +125,7 @@ def viterbi(words, tags, tagCounts, wordCounts, trigramStore):
         probabilities[(1, tag, previous)] = tri + given_tag + probabilities[(0, previous, '*')]
         backpointers[(1, tag, previous)] = '*'
   
+  # work out the rest
   for i in xrange(2, len(words)):
     word = words[i]
     for tag in tags:
@@ -153,13 +139,11 @@ def viterbi(words, tags, tagCounts, wordCounts, trigramStore):
           prob = tri + given_tag + probabilities[(i - 1, previous, preprevious)]
           options.append( (prob, preprevious) )
         options.sort()
-        # print options
         prob, preprev = options[-1]
         probabilities[(i, tag, previous)] = prob
         backpointers[(i, tag, previous)] = preprev
-        
-        
-  # print words
+  
+  # pick the final end state
   options = []
   for tag in tags:
     if len(words) > 1:
@@ -172,96 +156,22 @@ def viterbi(words, tags, tagCounts, wordCounts, trigramStore):
   
   results = [(prob, (tag, prev))]
   
-  # keys = probabilities.keys()
-  # keys.sort()
-  # print keys
-  # exit()
-  
+  # build up the results for this sentence
   for i in xrange(len(words) - 2, -1, -1):
     preprev = backpointers[(i+1, tag, prev)]
     tag = prev
     prev = preprev
-    # print i
-    # print tag
-    # print prev
     prob = probabilities[(i, tag, prev)]
     results.append( (prob, (tag, prev)) )
-  # print len(results)
-  # print len(words)
-  
   results.reverse()
-  # print results
   
+  # write them out
   for i in xrange(len(words)):
     (prob, (tag, prev)) = results[i]
     sys.stdout.write(words[i] + ' ' + tag + ' ' + str(prob) + '\n')
   sys.stdout.write('\n')
   return results
-  # exit()
   
-  
-  """
-  if len(words) > 1:
-    word = words[1]
-    for tag in tags:
-      options = []
-      for previous in tags:
-        tri = trigram_parameter(tag, previous, '*', tagCounts, trigramStore)
-        given_tag = prob_given_tag(word, tag, tags, tagCounts, wordCounts)
-        tri = -1000 if tri == 0 else math.log(tri, 2)
-        given_tag = -1000 if given_tag == 0 else math.log(given_tag, 2)
-        options.append( (tri + given_tag + probabilities[(0, previous)], previous) )
-      options.sort()
-      prob, prev = options[-1]
-      probabilities[(1, tag)] = prob
-      backpointers[(1, tag)] = prev
-    
-  for i in xrange(2, len(words)):
-    word = words[i]
-    for tag in tags:
-      options = []
-      for previous in tags:
-        for preprevious in tags:
-          tri = trigram_parameter(tag, previous, preprevious, tagCounts, trigramStore)
-          given_tag = prob_given_tag(word, tag, tags, tagCounts, wordCounts)
-          tri = -1000 if tri == 0 else math.log(tri, 2)
-          given_tag = -1000 if given_tag == 0 else math.log(given_tag, 2)
-          options.append( (tri + given_tag + probabilities[(i-1, previous)], previous) )
-          
-        
-
-      options.sort()
-      # print options
-      prob, backpointer = options[-1]
-      backpointers[(i, tag)] = backpointer
-      probabilities[(i, tag)] = prob
-      # if probabilities[(i, tag)] == 0:
-      #   print word
-      #   print tag
-      #   # print "trigram: "
-      #   print "p|t: ", prob_given_tag(word, tag, tags, tagCounts, wordCounts)
-  
-  options = []
-  for tag in tags:
-    options.append( (probabilities[(len(words) - 1, tag)], tag) )
-  options.sort()
-  
-  prob, tag = options[-1]
-  
-  results = [options[-1]]
-  for i in xrange(len(words) - 1, 0, -1):
-    previous = backpointers[(i, tag)]
-    prob = probabilities[(i, tag)]
-    results.append( (prob, previous) )
-    tag = previous
-  results.reverse()
-  for i in xrange(len(words)):
-    tag = results[i][1]
-    prob = results[i][0]
-    sys.stdout.write(words[i] + ' ' + tag + ' ' + str(prob) + '\n')
-  sys.stdout.write('\n')
-  return results
-"""
 # run the viterbi on every sentence
 def tag_all_words(inputFile, tags, tagCounts, trigramStore, wordCounts):
   for sentence in nextSentence(inputFile):
