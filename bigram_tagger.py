@@ -2,36 +2,25 @@ import sys
 import argparse
 import math
 
+# takes the parsed set of tags and the counts, and returns the set of tags with
+# rare words replaced with _RARE_
 def rarify(tags, wordCounts):
-  # print wordCounts
-  # exit(0)
   for word in wordCounts:
     if wordCounts[word] < 5:
       for tag in tags:
         if word in tags[tag]:
           tags[tag]['_RARE_'] = 0 if '_RARE_' not in tags[tag] else tags[tag]['_RARE_']
           tags[tag]['_RARE_'] += int(tags[tag][word])
-          # print "DELETING: ", tag, ':', word, ':', tags[tag][word]
           del tags[tag][word]
     else:
       for tag in tags:
         if word in tags[tag]:
           wordMap[word] = [] if word not in wordMap else wordMap[word]
           wordMap[word].append(tag)
-  # print tags
-  # for tag in tags:
-  #   try:
-  #     print tags[tag]['_RARE_']
-  #   except KeyError:
-  #     print "ERROR: ", tag
-  # exit(0)
-  # print tags
-  # print wordMap
   return tags
 
-# dictionary "tags" { tag: {word: count, word2: count2}, tag2: {word3: count3} }
+# gives dictionary "tags" { tag: {word: count, word2: count2}, tag2: {word3: count3} }
 def parseCounts(countsFile):
-  # sys.stdout.write('parseCounts')
   tags = {}
   tagCounts = {}
   wordCounts = {}
@@ -61,38 +50,32 @@ def parseCounts(countsFile):
       pass
     line = countsFile.readline()
     
-  # print bigramStore
   tagCounts['*'] = sum(bigramStore['*'].values())
   tagCounts['STOP'] = tagCounts['*']
   return rarify(tags, wordCounts), tagCounts, bigramStore, wordCounts
 
+# returns e(w|t)
 def prob_given_tag(word, tag, tags, tagCounts, wordCounts):
-  # print word
   if word not in tags[tag]:
-    # print "Word ", word, " not found in tag ", tag
-    # if word in wordCounts and wordCounts[word] > 5:
-    #   return 0
+    
+    # if this tag has no _RARE_ entry, force this word to be tagged something else
     if word == '_RARE_':
-      # print "Word is RARE with probability 0 in prob_given_tag"
       return 0
+    # if the word is in another tag, force it to be tagged as that tag
     elif word in wordMap and tag not in wordMap[word]:
-      # print "Word ", word, " is NOT RARE. Recycling..."
       return 0
     else:
-      # print "Word ", word, " is RARE in prob_given_tag for tag ", tag
       return prob_given_tag('_RARE_', tag, tags, tagCounts, wordCounts)
-  # print "prob of ", word, " given tag ", tag, " is ", float(tags[tag][word]) / tagCounts[tag]
   return float(tags[tag][word]) / tagCounts[tag]
 
+# returns q(t_i | t_i-1)
 def bigram_parameter(tag, previous, tagCounts, bigramStore):
-  # print tagCounts[previous]
-  # print store[previous]
   if tag not in bigramStore[previous]:
-    # print "TA`ramStore
-    return 0 #1 / tagCounts[previous]
+    return 0
   result = float(bigramStore[previous][tag]) / tagCounts[previous]
   return result
 
+# grab the next sentence out of the block. It's a generator, thus iterable.
 def nextSentence(f):
   sentence = []
   for line in f:
@@ -103,38 +86,24 @@ def nextSentence(f):
       sentence = []
       yield result
 
-
+# do viterbi using the previous methods, and print the outcomes to stdout.
 def viterbi(words, tags, tagCounts, wordCounts, bigramStore):
   backpointers = {}
   probabilities = {}
-  # print words
   word = words[0]
-  # if word == "May":
-  #   print '--------------------------------------------------------'
   for tag in tags:
-    # if word == "May":
-      # print bigram_parameter(tag, '*', tagCounts, bigramStore)
     probabilities[(0, tag)] = bigram_parameter(tag, '*', tagCounts, bigramStore) * prob_given_tag(word, tag, tags, tagCounts, wordCounts)
-  # print probabilities
-    # if word == "May":
-      # print probabilities
-  # exit()
   for i in xrange(1, len(words)):
     word = words[i]
     for tag in tags:
       options = []
       for previous in tags:
-        # print previous, tag, bigram_parameter(tag, previous, tagCounts, bigramStore) * prob_given_tag(word, tag, tags, tagCounts, wordCounts) * probabilities[(i-1, previous)]
         options.append( (bigram_parameter(tag, previous, tagCounts, bigramStore) * prob_given_tag(word, tag, tags, tagCounts, wordCounts) * probabilities[(i-1, previous)], previous) )
+
       options.sort()
-      # print options
       prob, backpointer = options[-1]
       backpointers[(i, tag)] = backpointer
       probabilities[(i, tag)] = prob
-    # print backpointers
-    # print probabilities
-    # exit(0)
-    
   
   options = []
   for tag in tags:
@@ -150,33 +119,14 @@ def viterbi(words, tags, tagCounts, wordCounts, bigramStore):
     results.append( (prob, previous) )
     tag = previous
   results.reverse()
-  # print results
-  # exit()
   for i in xrange(len(words)):
     tag = results[i][1]
     prob = results[i][0]
-    # print tag, prob
-    # try:
     sys.stdout.write(words[i] + ' ' + tag + ' ' + str(math.log(prob, 2)) + '\n')
-    # except ValueError:
-      # print words
-      # print probabilities
-      # print results
-      # exit(0)
   sys.stdout.write('\n')
-  # exit(0)
   return results
-  
-      
-    
-        
-        
-        
-        
-      # max([bigram_parameter(tag, previous, tagCounts, bigramStore) * prob_given_tag(word, tag) for previous in tags])
-      
-  
 
+# run the viterbi on every sentence
 def tag_all_words(inputFile, tags, tagCounts, bigramStore, wordCounts):
   for sentence in nextSentence(inputFile):
     viterbi(sentence, tags, tagCounts, bigramStore, wordCounts)
@@ -189,10 +139,6 @@ args = parser.parse_args()
 wordMap = {}
 countsFile = open(args.counts, 'r')
 tags, tagCounts, bigramStore, wordCounts = parseCounts(countsFile)
-# print wordCounts
-
-# print tags
-# print tags, tagCounts, bigramStore
 
 inputFile = open(args.input, 'r')
 tag_all_words(inputFile, tags, tagCounts, wordCounts, bigramStore)
